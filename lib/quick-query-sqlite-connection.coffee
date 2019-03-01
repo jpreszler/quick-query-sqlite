@@ -35,6 +35,7 @@ class QuickQuerySqliteTable
 class QuickQuerySqliteDatabase
   type: 'database'
   child_type: 'table'
+  child_type: 'view'
   constructor: (@connection,name) ->
     @name = name
   toString: ->
@@ -43,6 +44,20 @@ class QuickQuerySqliteDatabase
     @connection
   children: (callback)->
     @connection.getTables(@,callback)
+    @connection.getViews(@,callback)
+
+class QuickQuerySqliteView
+  type: 'view'
+  child_type: 'column'
+  constructor: (@database,row,fields) ->
+    @connection = @database.connection
+    @name = row[fields[0].name]
+  toString: ->
+    @name
+  parent: ->
+    @database
+  children: (callback)->
+    @connection.getColumns(@,callback)
 
 module.exports =
 class QuickQuerySqliteConnection
@@ -184,6 +199,17 @@ class QuickQuerySqliteConnection
           new QuickQuerySqliteTable(database,row,fields)
         callback(tables)
 
+  getViews: (database,callback) ->
+    if database.name=='temp'
+      text = "SELECT name FROM sqlite_temp_master WHERE type='view'"
+    else
+      text = "SELECT name FROM sqlite_master WHERE type='view'"
+     @query text, (err,rows, fields) =>
+      if !err
+        views = @objRowsMap rows,fields, (row) =>
+          new QuickQuerySqliteView(database,row,fields)
+        callback(views)
+        
   getColumns: (table,callback) ->
     text = "PRAGMA table_info('#{table.name}')"
     @query text, (err,rows, fields) =>
